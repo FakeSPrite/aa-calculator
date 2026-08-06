@@ -92,11 +92,11 @@ function App() {
 
     // Setup Realtime subscriptions
     const famsSub = supabase.channel('public:families')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'families', filter: `activity_id=eq.${currentActivity.id}` }, fetchActivityData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'families' }, fetchActivityData)
       .subscribe();
 
     const expsSub = supabase.channel('public:expenses')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: `activity_id=eq.${currentActivity.id}` }, fetchActivityData)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, fetchActivityData)
       .subscribe();
 
     const handleVisibilityChange = () => {
