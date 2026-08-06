@@ -181,7 +181,7 @@ function App() {
   if (!currentActivity) {
     return (
       <div className="glass-panel">
-        <h1>🏖️ 结账小助手</h1>
+        <h1>🏖️ AA 算账神器</h1>
         
         <form onSubmit={createActivity} className="form-group glass-panel" style={{ padding: '20px' }}>
           <h3>创建新账本 / 活动</h3>
