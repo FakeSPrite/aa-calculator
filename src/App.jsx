@@ -28,15 +28,31 @@ function App() {
   const [newExpParticipants, setNewExpParticipants] = useState([]);
   const [editingExpId, setEditingExpId] = useState(null);
 
-  // Fetch Activities on Mount
-  useEffect(() => {
-    fetchActivities();
-  }, []);
-
   const fetchActivities = async () => {
     const { data, error } = await supabase.from('activities').select('*').order('created_at', { ascending: false });
     if (!error && data) setActivities(data);
   };
+
+  // Fetch Activities on Mount and setup subscriptions
+  useEffect(() => {
+    fetchActivities();
+
+    const actsSub = supabase.channel('public:activities')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, fetchActivities)
+      .subscribe();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchActivities();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      supabase.removeChannel(actsSub);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   const createActivity = async (e) => {
     e.preventDefault();
@@ -83,9 +99,17 @@ function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'expenses', filter: `activity_id=eq.${currentActivity.id}` }, fetchActivityData)
       .subscribe();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchActivityData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
       supabase.removeChannel(famsSub);
       supabase.removeChannel(expsSub);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentActivity]);
 
