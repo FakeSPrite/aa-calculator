@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon.png'],
       manifest: {
-        name: '结账小助手',
+        name: 'AA 算账神器',
         short_name: 'AA Calculator',
         description: 'AA Expense Splitter App',
         theme_color: '#e0c3fc',

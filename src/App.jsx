@@ -9,6 +9,8 @@ function App() {
   const [activities, setActivities] = useState([]);
   const [currentActivity, setCurrentActivity] = useState(null);
   const [newActivityName, setNewActivityName] = useState('');
+  const [isEditingActivityName, setIsEditingActivityName] = useState(false);
+  const [editActivityName, setEditActivityName] = useState('');
 
   // Internal Tabs State (families, expenses, settlement)
   const [activeTab, setActiveTab] = useState('families');
@@ -44,6 +46,17 @@ function App() {
       setActivities([data[0], ...activities]);
       setNewActivityName('');
     }
+  };
+
+  const saveActivityName = async (e) => {
+    e.preventDefault();
+    if (!editActivityName.trim()) return;
+    
+    setCurrentActivity(prev => ({ ...prev, name: editActivityName }));
+    setActivities(prev => prev.map(a => a.id === currentActivity.id ? { ...a, name: editActivityName } : a));
+    setIsEditingActivityName(false);
+    
+    await supabase.from('activities').update({ name: editActivityName }).eq('id', currentActivity.id);
   };
 
   // When currentActivity changes, fetch its data and set up realtime subscriptions
@@ -225,7 +238,26 @@ function App() {
         <button className="btn btn-icon" onClick={goHome} style={{ background: 'rgba(255,255,255,0.5)' }}>
           <Home size={20} color="var(--primary-color)"/>
         </button>
-        <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary-color)' }}>{currentActivity.name}</h2>
+        {isEditingActivityName ? (
+          <form onSubmit={saveActivityName} style={{ display: 'flex', gap: '5px', flex: 1 }}>
+            <input 
+              type="text" 
+              value={editActivityName} 
+              onChange={e => setEditActivityName(e.target.value)} 
+              autoFocus 
+              style={{ flex: 1, padding: '4px 8px' }}
+            />
+            <button type="submit" className="btn btn-primary" style={{ padding: '4px 12px', width: 'auto' }}>保存</button>
+            <button type="button" className="btn" onClick={() => setIsEditingActivityName(false)} style={{ padding: '4px 12px', width: 'auto' }}>取消</button>
+          </form>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary-color)' }}>{currentActivity.name}</h2>
+            <button className="btn btn-icon" onClick={() => { setIsEditingActivityName(true); setEditActivityName(currentActivity.name); }} style={{ color: 'var(--text-secondary)' }}>
+              <Edit2 size={16} />
+            </button>
+          </div>
+        )}
       </div>
       
       <div className="tabs">
