@@ -81,16 +81,20 @@ function App() {
   const addFamily = async (e) => {
     e.preventDefault();
     if (!newFamilyName) return;
-    await supabase.from('families').insert([{
+    const { data } = await supabase.from('families').insert([{
       activity_id: currentActivity.id,
       name: newFamilyName,
       members: Number(newFamilyMembers)
-    }]);
+    }]).select();
+    if (data) {
+      setFamilies(prev => [...prev, data[0]]);
+    }
     setNewFamilyName('');
     setNewFamilyMembers(1);
   };
 
   const deleteFamily = async (id) => {
+    setFamilies(prev => prev.filter(f => f.id !== id));
     await supabase.from('families').delete().eq('id', id);
   };
 
@@ -98,13 +102,17 @@ function App() {
     e.preventDefault();
     if (!newExpName || !newExpAmount || !newExpPayer || newExpParticipants.length === 0) return;
     
-    await supabase.from('expenses').insert([{
+    const { data } = await supabase.from('expenses').insert([{
       activity_id: currentActivity.id,
       name: newExpName,
       amount: Number(newExpAmount),
       payer_id: newExpPayer,
       participant_ids: newExpParticipants
-    }]);
+    }]).select();
+    
+    if (data) {
+      setExpenses(prev => [...prev, data[0]]);
+    }
     
     setNewExpName('');
     setNewExpAmount('');
@@ -120,6 +128,7 @@ function App() {
   };
 
   const deleteExpense = async (id) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
     await supabase.from('expenses').delete().eq('id', id);
   };
 
