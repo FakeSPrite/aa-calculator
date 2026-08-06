@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen } from 'lucide-react';
+import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { calculateBalances } from './calculator';
 import './index.css';
@@ -24,6 +24,7 @@ function App() {
   const [newExpAmount, setNewExpAmount] = useState('');
   const [newExpPayer, setNewExpPayer] = useState('');
   const [newExpParticipants, setNewExpParticipants] = useState([]);
+  const [editingExpId, setEditingExpId] = useState(null);
 
   // Fetch Activities on Mount
   useEffect(() => {
@@ -98,24 +99,56 @@ function App() {
     await supabase.from('families').delete().eq('id', id);
   };
 
-  const addExpense = async (e) => {
+  const saveExpense = async (e) => {
     e.preventDefault();
     if (!newExpName || !newExpAmount || !newExpPayer || newExpParticipants.length === 0) return;
     
-    const { data } = await supabase.from('expenses').insert([{
-      activity_id: currentActivity.id,
-      name: newExpName,
-      amount: Number(newExpAmount),
-      payer_id: newExpPayer,
-      participant_ids: newExpParticipants
-    }]).select();
-    
-    if (data) {
-      setExpenses(prev => [...prev, data[0]]);
+    if (editingExpId) {
+      setExpenses(prev => prev.map(exp => exp.id === editingExpId ? {
+        ...exp,
+        name: newExpName,
+        amount: Number(newExpAmount),
+        payer_id: newExpPayer,
+        participant_ids: newExpParticipants
+      } : exp));
+      
+      await supabase.from('expenses').update({
+        name: newExpName,
+        amount: Number(newExpAmount),
+        payer_id: newExpPayer,
+        participant_ids: newExpParticipants
+      }).eq('id', editingExpId);
+    } else {
+      const { data } = await supabase.from('expenses').insert([{
+        activity_id: currentActivity.id,
+        name: newExpName,
+        amount: Number(newExpAmount),
+        payer_id: newExpPayer,
+        participant_ids: newExpParticipants
+      }]).select();
+      
+      if (data) {
+        setExpenses(prev => [...prev, data[0]]);
+      }
     }
     
+    cancelEditExpense();
+  };
+
+  const startEditExpense = (exp) => {
+    setEditingExpId(exp.id);
+    setNewExpName(exp.name);
+    setNewExpAmount(exp.amount.toString());
+    setNewExpPayer(exp.payer_id);
+    setNewExpParticipants(exp.participant_ids);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const cancelEditExpense = () => {
+    setEditingExpId(null);
     setNewExpName('');
     setNewExpAmount('');
+    setNewExpPayer('');
     setNewExpParticipants([]);
   };
 
@@ -125,6 +158,11 @@ function App() {
     } else {
       setNewExpParticipants([...newExpParticipants, id]);
     }
+  };
+
+  const selectAllParticipants = (e) => {
+    e.preventDefault();
+    setNewExpParticipants(families.map(f => f.id));
   };
 
   const deleteExpense = async (id) => {
@@ -250,8 +288,8 @@ function App() {
       {/* EXPENSES TAB */}
       {activeTab === 'expenses' && (
         <div>
-          <form onSubmit={addExpense} className="form-group glass-panel" style={{ padding: '20px' }}>
-            <h3>记一笔账</h3>
+          <form onSubmit={saveExpense} className="form-group glass-panel" style={{ padding: '20px' }}>
+            <h3>{editingExpId ? '修改账单' : '记一笔账'}</h3>
             <input 
               type="text" 
               placeholder="项目名称 (如 吃饭, 租车)" 
@@ -273,7 +311,13 @@ function App() {
               {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
 
-            <label>谁参与了？ (按家庭人头平摊)</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <label style={{ marginBottom: 0 }}>谁参与了？ (按家庭人头平摊)</label>
+              <button className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }} onClick={selectAllParticipants}>
+                <CheckSquare size={14} style={{ marginRight: '4px', marginBottom: '-2px' }} /> 全选
+              </button>
+            </div>
+            
             <div className="badges-container" style={{ marginBottom: '15px' }}>
               {families.map(f => (
                 <div 
@@ -286,22 +330,37 @@ function App() {
               ))}
             </div>
 
-            <button type="submit" className="btn btn-primary">
-              <Plus size={18} /> 记账
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button type="submit" className="btn btn-primary">
+                {editingExpId ? <Edit2 size={18} /> : <Plus size={18} />} {editingExpId ? '保存修改' : '记账'}
+              </button>
+              {editingExpId && (
+                <button type="button" className="btn" onClick={cancelEditExpense} style={{ background: 'var(--bg-color)', color: 'var(--text-color)' }}>
+                  取消
+                </button>
+              )}
+            </div>
           </form>
 
           <div className="list-container">
             {expenses.map(e => {
               const payer = families.find(f => f.id === e.payer_id)?.name || '未知';
+              const participantNames = e.participant_ids
+                .map(id => families.find(f => f.id === id)?.name)
+                .filter(Boolean)
+                .join(', ');
+                
               return (
                 <div key={e.id} className="list-item">
                   <div className="item-info">
                     <h4>{e.name}</h4>
-                    <p>{payer} 付款 • {e.participant_ids.length} 家参与</p>
+                    <p>{payer} 付款 • 参与: {participantNames || '无'}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div className="item-amount">¥{e.amount}</div>
+                    <button className="btn btn-icon" onClick={() => startEditExpense(e)} style={{ color: 'var(--primary-color)' }}>
+                      <Edit2 size={18} />
+                    </button>
                     <button className="btn btn-icon" onClick={() => deleteExpense(e.id)}>
                       <Trash2 size={18} />
                     </button>
