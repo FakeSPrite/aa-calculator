@@ -198,21 +198,24 @@ function App() {
         <div>
           <form onSubmit={addFamily} className="form-group glass-panel" style={{ padding: '20px' }}>
             <h3>添加家庭</h3>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <input 
                 type="text" 
                 placeholder="名称 (如 A家)" 
                 value={newFamilyName}
                 onChange={e => setNewFamilyName(e.target.value)}
               />
-              <input 
-                type="number" 
-                min="1"
-                placeholder="人数" 
-                value={newFamilyMembers}
-                onChange={e => setNewFamilyMembers(e.target.value)}
-                style={{ width: '100px' }}
-              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <input 
+                  type="number" 
+                  min="1"
+                  placeholder="人数" 
+                  value={newFamilyMembers}
+                  onChange={e => setNewFamilyMembers(e.target.value)}
+                  style={{ width: '80px' }}
+                />
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>人(用于平摊)</span>
+              </div>
             </div>
             <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>
               <Plus size={18} /> 添加
