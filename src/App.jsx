@@ -75,6 +75,14 @@ function App() {
     await supabase.from('activities').update({ name: editActivityName }).eq('id', currentActivity.id);
   };
 
+  const deleteActivity = async (id, e) => {
+    e.stopPropagation();
+    if (window.confirm('确定要删除这个账本吗？删除后里面的家庭和账单会被全部清空且无法恢复！')) {
+      setActivities(prev => prev.filter(a => a.id !== id));
+      await supabase.from('activities').delete().eq('id', id);
+    }
+  };
+
   // When currentActivity changes, fetch its data and set up realtime subscriptions
   useEffect(() => {
     if (!currentActivity) return;
@@ -246,7 +254,12 @@ function App() {
                   <FolderOpen size={20} color="var(--primary-color)" />
                   <h4>{act.name}</h4>
                 </div>
-                <ArrowRight size={18} color="var(--text-secondary)" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <button className="btn btn-icon" onClick={(e) => deleteActivity(act.id, e)}>
+                    <Trash2 size={18} />
+                  </button>
+                  <ArrowRight size={18} color="var(--text-secondary)" />
+                </div>
               </div>
             ))
           )}
