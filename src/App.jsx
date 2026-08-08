@@ -51,6 +51,9 @@ const i18n = {
     optimalSettlementDesc: '根据每个人头的花费，计算出的最少转账次数方案。',
     allSettled: '🎉 账目已结清，大家互不相欠！',
     familyNetBalance: '家庭净余额',
+    allowShare: '允许其继续分享',
+    canShareTag: '可分享',
+    cannotShareTag: '不可分享',
   },
   en: {
     appName: '🏖️ AA Calculator',
@@ -98,6 +101,9 @@ const i18n = {
     optimalSettlementDesc: 'The least number of transactions based on per-person spending.',
     allSettled: '🎉 All settled, no one owes anything!',
     familyNetBalance: 'Family Net Balance',
+    allowShare: 'Allow them to share',
+    canShareTag: 'Can share',
+    cannotShareTag: 'Cannot share',
   }
 };
 
@@ -142,7 +148,9 @@ function App() {
   // Share Modal State
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareEmail, setShareEmail] = useState('');
+  const [shareCanShare, setShareCanShare] = useState(false);
   const [sharedUsers, setSharedUsers] = useState([]);
+  const [currentUserShareInfo, setCurrentUserShareInfo] = useState(null);
 
   // Check auth
   useEffect(() => {
@@ -265,6 +273,23 @@ function App() {
     };
   }, [currentActivity]);
 
+  useEffect(() => {
+    if (!currentActivity || !session?.user) return;
+    const isOwner = currentActivity.owner_id === session.user.id;
+    if (!isOwner) {
+      supabase.from('activity_shares')
+        .select('can_share')
+        .eq('activity_id', currentActivity.id)
+        .eq('shared_with_email', session.user.email)
+        .single()
+        .then(({data}) => {
+          if (data) setCurrentUserShareInfo(data);
+        });
+    } else {
+      setCurrentUserShareInfo(null);
+    }
+  }, [currentActivity, session]);
+
   // Share functionality
   useEffect(() => {
     if (showShareModal && currentActivity) {
@@ -282,11 +307,13 @@ function App() {
     if (!shareEmail.trim()) return;
     const { data, error } = await supabase.from('activity_shares').insert([{
       activity_id: currentActivity.id,
-      shared_with_email: shareEmail.trim()
+      shared_with_email: shareEmail.trim(),
+      can_share: shareCanShare
     }]).select();
     if (data) {
       setSharedUsers([...sharedUsers, data[0]]);
       setShareEmail('');
+      setShareCanShare(false);
     } else if (error) {
       alert(`${t.shareFail} ${error.message}`);
     }
@@ -515,6 +542,7 @@ function App() {
 
   // --- Render Activity Details ---
   const isOwner = currentActivity.owner_id === session.user.id;
+  const hasSharePermission = isOwner || (currentUserShareInfo?.can_share === true);
 
   return (
     <div className="glass-panel">
@@ -545,9 +573,11 @@ function App() {
 
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {renderLangToggle()}
-          <button className="btn" onClick={() => setShowShareModal(true)} style={{ width: 'auto', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--primary-color)', color: 'white' }}>
-            <Share2 size={16} /> {t.share}
-          </button>
+          {hasSharePermission && (
+            <button className="btn" onClick={() => setShowShareModal(true)} style={{ width: 'auto', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--primary-color)', color: 'white' }}>
+              <Share2 size={16} /> {t.share}
+            </button>
+          )}
           {isOwner && (
             <button className="btn btn-icon" onClick={(e) => deleteActivity(currentActivity.id, e)} style={{ background: 'rgba(255,255,255,0.5)' }}>
               <Trash2 size={20} color="var(--danger-color)" />
@@ -564,15 +594,26 @@ function App() {
               <X size={18} />
             </button>
           </div>
-          <form onSubmit={shareActivity} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-            <input 
-              type="email" 
-              placeholder={t.shareEmailPlaceholder} 
-              value={shareEmail}
-              onChange={e => setShareEmail(e.target.value)}
-              required
-            />
-            <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>{t.addBtn}</button>
+          <form onSubmit={shareActivity} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="email" 
+                placeholder={t.shareEmailPlaceholder} 
+                value={shareEmail}
+                onChange={e => setShareEmail(e.target.value)}
+                required
+              />
+              <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>{t.addBtn}</button>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
+              <input 
+                type="checkbox" 
+                checked={shareCanShare}
+                onChange={e => setShareCanShare(e.target.checked)}
+                style={{ width: 'auto', margin: 0 }}
+              />
+              <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{t.allowShare}</span>
+            </label>
           </form>
 
           <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>{t.sharedMembers}</h4>
@@ -582,10 +623,17 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {sharedUsers.map(user => (
                 <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: 'var(--bg-color)', borderRadius: '8px' }}>
-                  <span style={{ fontSize: '0.9rem' }}>{user.shared_with_email}</span>
-                  <button className="btn btn-icon" onClick={() => removeShare(user.id)} style={{ color: 'var(--danger-color)' }}>
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '0.9rem' }}>{user.shared_with_email}</span>
+                    <span style={{ fontSize: '0.75rem', color: user.can_share ? 'var(--success-color)' : 'var(--text-secondary)' }}>
+                      {user.can_share ? t.canShareTag : t.cannotShareTag}
+                    </span>
+                  </div>
+                  {hasSharePermission && (
+                    <button className="btn btn-icon" onClick={() => removeShare(user.id)} style={{ color: 'var(--danger-color)' }}>
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
