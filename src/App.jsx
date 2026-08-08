@@ -425,16 +425,16 @@ function App() {
           </div>
         )}
 
-        {isOwner && (
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn" onClick={() => setShowShareModal(true)} style={{ width: 'auto', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--primary-color)', color: 'white' }}>
-              <Share2 size={16} /> 分享
-            </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn" onClick={() => setShowShareModal(true)} style={{ width: 'auto', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--primary-color)', color: 'white' }}>
+            <Share2 size={16} /> 分享
+          </button>
+          {isOwner && (
             <button className="btn btn-icon" onClick={(e) => deleteActivity(currentActivity.id, e)} style={{ background: 'rgba(255,255,255,0.5)' }}>
               <Trash2 size={20} color="var(--danger-color)" />
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {showShareModal && (
