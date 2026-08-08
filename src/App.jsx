@@ -442,8 +442,8 @@ function App() {
   if (!currentActivity) {
     return (
       <div className="glass-panel">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{t.appName}</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem', whiteSpace: 'nowrap' }}>{t.appName}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
             {renderLangToggle()}
             {session.user.user_metadata?.avatar_url && (
@@ -518,8 +518,8 @@ function App() {
 
   return (
     <div className="glass-panel">
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px', gap: '10px' }}>
-        <button className="btn btn-icon" onClick={goHome} style={{ background: 'rgba(255,255,255,0.5)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px', gap: '10px', flexWrap: 'wrap' }}>
+        <button className="btn btn-icon" onClick={goHome} style={{ background: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>
           <Home size={20} color="var(--primary-color)"/>
         </button>
         {isEditingActivityName ? (
@@ -535,15 +535,15 @@ function App() {
             <button type="button" className="btn" onClick={() => setIsEditingActivityName(false)} style={{ padding: '4px 12px', width: 'auto' }}>{t.cancel}</button>
           </form>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1 }}>
-            <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary-color)' }}>{currentActivity.name}</h2>
-            <button className="btn btn-icon" onClick={() => { setIsEditingActivityName(true); setEditActivityName(currentActivity.name); }} style={{ color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1, minWidth: '150px' }}>
+            <h2 style={{ margin: 0, fontSize: '1.5rem', color: 'var(--primary-color)', wordBreak: 'break-word' }}>{currentActivity.name}</h2>
+            <button className="btn btn-icon" onClick={() => { setIsEditingActivityName(true); setEditActivityName(currentActivity.name); }} style={{ color: 'var(--text-secondary)', flexShrink: 0 }}>
               <Edit2 size={16} />
             </button>
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           {renderLangToggle()}
           <button className="btn" onClick={() => setShowShareModal(true)} style={{ width: 'auto', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--primary-color)', color: 'white' }}>
             <Share2 size={16} /> {t.share}
