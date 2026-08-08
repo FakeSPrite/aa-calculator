@@ -1,10 +1,117 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X } from 'lucide-react';
+import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { calculateBalances } from './calculator';
 import './index.css';
 
+const i18n = {
+  zh: {
+    appName: '🏖️ AA 算账神器',
+    loginDesc: '请使用 Google 账号登录以管理和分享账单',
+    loginBtn: '使用 Google 登录',
+    loading: '加载中...',
+    logout: '退出登录',
+    createActivityTitle: '创建新账本 / 活动',
+    activityNamePlaceholder: '活动名称 (如：周末滑雪)',
+    allActivities: '所有账本',
+    noActivities: '暂无账本，请先创建一个！',
+    createdByMe: '我创建的',
+    sharedBy: '别人分享的',
+    deleteActivityConfirm: '确定要删除这个账本吗？删除后里面的家庭和账单会被全部清空且无法恢复！',
+    save: '保存',
+    cancel: '取消',
+    share: '分享',
+    shareToOthers: '分享给其他人',
+    shareEmailPlaceholder: '输入对方的 Google 邮箱',
+    addBtn: '添加',
+    sharedMembers: '已分享的成员：',
+    notSharedYet: '尚未分享给任何人',
+    shareFail: '分享失败: (不能重复分享给同一个人)',
+    createFail: '创建失败:',
+    tabFamilies: '家庭',
+    tabExpenses: '账单',
+    tabSettlement: '结算',
+    addFamilyTitle: '添加家庭',
+    familyNamePlaceholder: '名称 (如 A家)',
+    membersPlaceholder: '人数',
+    membersSuffix: '人(用于平摊)',
+    editExpenseTitle: '修改账单',
+    addExpenseTitle: '记一笔账',
+    expenseNamePlaceholder: '项目名称 (如 吃饭, 租车)',
+    expenseAmountPlaceholder: '总金额',
+    whoPaid: '谁付款的？',
+    selectPayer: '请选择付款人',
+    whoParticipated: '谁参与了？ (按家庭人头平摊)',
+    selectAll: '全选',
+    saveChanges: '保存修改',
+    addExpenseBtn: '记账',
+    payerAndParticipants: (payer, participants) => `${payer} 付款 • 参与: ${participants || '无'}`,
+    unknown: '未知',
+    optimalSettlement: '最优结算方案',
+    optimalSettlementDesc: '根据每个人头的花费，计算出的最少转账次数方案。',
+    allSettled: '🎉 账目已结清，大家互不相欠！',
+    familyNetBalance: '家庭净余额',
+  },
+  en: {
+    appName: '🏖️ AA Calculator',
+    loginDesc: 'Please sign in with your Google account to manage and share bills',
+    loginBtn: 'Sign in with Google',
+    loading: 'Loading...',
+    logout: 'Log out',
+    createActivityTitle: 'Create new bill / activity',
+    activityNamePlaceholder: 'Activity name (e.g. Weekend Skiing)',
+    allActivities: 'All bills',
+    noActivities: 'No bills yet, please create one first!',
+    createdByMe: 'Created by me',
+    sharedBy: 'Shared by',
+    deleteActivityConfirm: 'Are you sure you want to delete this bill? All families and expenses inside will be permanently deleted!',
+    save: 'Save',
+    cancel: 'Cancel',
+    share: 'Share',
+    shareToOthers: 'Share with others',
+    shareEmailPlaceholder: 'Enter their Google email',
+    addBtn: 'Add',
+    sharedMembers: 'Shared members:',
+    notSharedYet: 'Not shared with anyone yet',
+    shareFail: 'Share failed: (Cannot share to the same person twice)',
+    createFail: 'Create failed:',
+    tabFamilies: 'Families',
+    tabExpenses: 'Expenses',
+    tabSettlement: 'Settlement',
+    addFamilyTitle: 'Add Family',
+    familyNamePlaceholder: 'Name (e.g. Family A)',
+    membersPlaceholder: 'Members',
+    membersSuffix: 'people (for splitting)',
+    editExpenseTitle: 'Edit Expense',
+    addExpenseTitle: 'Add Expense',
+    expenseNamePlaceholder: 'Item name (e.g. Dinner, Car rental)',
+    expenseAmountPlaceholder: 'Total amount',
+    whoPaid: 'Who paid?',
+    selectPayer: 'Select payer',
+    whoParticipated: 'Who participated? (Split by head count)',
+    selectAll: 'Select all',
+    saveChanges: 'Save changes',
+    addExpenseBtn: 'Add expense',
+    payerAndParticipants: (payer, participants) => `Paid by ${payer} • Participants: ${participants || 'None'}`,
+    unknown: 'Unknown',
+    optimalSettlement: 'Optimal Settlement Plan',
+    optimalSettlementDesc: 'The least number of transactions based on per-person spending.',
+    allSettled: '🎉 All settled, no one owes anything!',
+    familyNetBalance: 'Family Net Balance',
+  }
+};
+
 function App() {
+  // Language State
+  const [lang, setLang] = useState(() => localStorage.getItem('app_lang') || 'zh');
+  const t = i18n[lang];
+
+  const toggleLang = () => {
+    const newLang = lang === 'zh' ? 'en' : 'zh';
+    setLang(newLang);
+    localStorage.setItem('app_lang', newLang);
+  };
+
   // Auth state
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +199,7 @@ function App() {
       setActivities([data[0], ...activities]);
       setNewActivityName('');
     } else if (error) {
-      alert("创建失败: " + error.message);
+      alert(`${t.createFail} ${error.message}`);
     }
   };
 
@@ -109,7 +216,7 @@ function App() {
 
   const deleteActivity = async (id, e) => {
     e.stopPropagation();
-    if (window.confirm('确定要删除这个账本吗？删除后里面的家庭和账单会被全部清空且无法恢复！')) {
+    if (window.confirm(t.deleteActivityConfirm)) {
       setActivities(prev => prev.filter(a => a.id !== id));
       await supabase.from('activities').delete().eq('id', id);
       if (currentActivity && currentActivity.id === id) {
@@ -181,7 +288,7 @@ function App() {
       setSharedUsers([...sharedUsers, data[0]]);
       setShareEmail('');
     } else if (error) {
-      alert('分享失败: (不能重复分享给同一个人) ' + error.message);
+      alert(`${t.shareFail} ${error.message}`);
     }
   };
 
@@ -298,16 +405,26 @@ function App() {
     await supabase.auth.signOut();
   };
 
+  const renderLangToggle = () => (
+    <button className="btn btn-icon" onClick={toggleLang} title={lang === 'zh' ? 'Switch to English' : '切换到中文'} style={{ background: 'rgba(255,255,255,0.5)', marginRight: '10px' }}>
+      <Globe size={20} color="var(--primary-color)" />
+      <span style={{ fontSize: '0.8rem', marginLeft: '5px', fontWeight: 'bold' }}>{lang === 'zh' ? 'EN' : '中'}</span>
+    </button>
+  );
+
   if (loading) {
-    return <div className="glass-panel" style={{ textAlign: 'center', padding: '40px' }}>Loading...</div>;
+    return <div className="glass-panel" style={{ textAlign: 'center', padding: '40px' }}>{t.loading}</div>;
   }
 
   // --- Render Login ---
   if (!session) {
     return (
-      <div className="glass-panel" style={{ textAlign: 'center', padding: '40px 20px' }}>
-        <h1 style={{ marginBottom: '30px' }}>🏖️ AA 算账神器</h1>
-        <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>请使用 Google 账号登录以管理和分享账单</p>
+      <div className="glass-panel" style={{ textAlign: 'center', padding: '40px 20px', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
+          {renderLangToggle()}
+        </div>
+        <h1 style={{ marginBottom: '30px', marginTop: '20px' }}>{t.appName}</h1>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>{t.loginDesc}</p>
         <button onClick={handleLogin} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '10px', width: 'auto', padding: '12px 24px', fontSize: '1.1rem' }}>
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -315,7 +432,7 @@ function App() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          使用 Google 登录
+          {t.loginBtn}
         </button>
       </div>
     );
@@ -326,31 +443,32 @@ function App() {
     return (
       <div className="glass-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>🏖️ AA 算账神器</h1>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ margin: 0, fontSize: '1.5rem' }}>{t.appName}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+            {renderLangToggle()}
             {session.user.user_metadata?.avatar_url && (
               <img 
                 src={session.user.user_metadata.avatar_url} 
                 alt="Avatar" 
-                style={{ width: '32px', height: '32px', borderRadius: '50%' }}
+                style={{ width: '32px', height: '32px', borderRadius: '50%', marginLeft: '5px' }}
                 referrerPolicy="no-referrer"
               />
             )}
             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               {session.user.email}
             </span>
-            <button className="btn btn-icon" onClick={handleLogout} title="退出登录" style={{ background: 'rgba(255,255,255,0.5)' }}>
+            <button className="btn btn-icon" onClick={handleLogout} title={t.logout} style={{ background: 'rgba(255,255,255,0.5)', marginLeft: '5px' }}>
               <LogOut size={20} color="var(--danger-color)"/>
             </button>
           </div>
         </div>
         
         <form onSubmit={createActivity} className="form-group glass-panel" style={{ padding: '20px' }}>
-          <h3>创建新账本 / 活动</h3>
+          <h3>{t.createActivityTitle}</h3>
           <div style={{ display: 'flex', gap: '10px' }}>
             <input 
               type="text" 
-              placeholder="活动名称 (如：周末滑雪)" 
+              placeholder={t.activityNamePlaceholder} 
               value={newActivityName}
               onChange={e => setNewActivityName(e.target.value)}
             />
@@ -360,10 +478,10 @@ function App() {
           </div>
         </form>
 
-        <h3 style={{ marginTop: '20px' }}>所有账本</h3>
+        <h3 style={{ marginTop: '20px' }}>{t.allActivities}</h3>
         <div className="list-container">
           {activities.length === 0 ? (
-            <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>暂无账本，请先创建一个！</p>
+            <p style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>{t.noActivities}</p>
           ) : (
             activities.map(act => {
               const isOwner = act.owner_id === session.user.id;
@@ -374,7 +492,7 @@ function App() {
                     <div>
                       <h4 style={{ margin: 0 }}>{act.name}</h4>
                       <span style={{ fontSize: '0.75rem', color: isOwner ? 'var(--primary-color)' : 'var(--text-secondary)' }}>
-                        {isOwner ? '我创建的' : `别人分享的 (${act.owner_email})`}
+                        {isOwner ? t.createdByMe : `${t.sharedBy} (${act.owner_email})`}
                       </span>
                     </div>
                   </div>
@@ -413,8 +531,8 @@ function App() {
               autoFocus 
               style={{ flex: 1, padding: '4px 8px' }}
             />
-            <button type="submit" className="btn btn-primary" style={{ padding: '4px 12px', width: 'auto' }}>保存</button>
-            <button type="button" className="btn" onClick={() => setIsEditingActivityName(false)} style={{ padding: '4px 12px', width: 'auto' }}>取消</button>
+            <button type="submit" className="btn btn-primary" style={{ padding: '4px 12px', width: 'auto' }}>{t.save}</button>
+            <button type="button" className="btn" onClick={() => setIsEditingActivityName(false)} style={{ padding: '4px 12px', width: 'auto' }}>{t.cancel}</button>
           </form>
         ) : (
           <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: 1 }}>
@@ -426,8 +544,9 @@ function App() {
         )}
 
         <div style={{ display: 'flex', gap: '10px' }}>
+          {renderLangToggle()}
           <button className="btn" onClick={() => setShowShareModal(true)} style={{ width: 'auto', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '5px', background: 'var(--primary-color)', color: 'white' }}>
-            <Share2 size={16} /> 分享
+            <Share2 size={16} /> {t.share}
           </button>
           {isOwner && (
             <button className="btn btn-icon" onClick={(e) => deleteActivity(currentActivity.id, e)} style={{ background: 'rgba(255,255,255,0.5)' }}>
@@ -440,7 +559,7 @@ function App() {
       {showShareModal && (
         <div className="glass-panel" style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.8)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h3 style={{ margin: 0 }}>分享给其他人</h3>
+            <h3 style={{ margin: 0 }}>{t.shareToOthers}</h3>
             <button className="btn btn-icon" onClick={() => setShowShareModal(false)}>
               <X size={18} />
             </button>
@@ -448,17 +567,17 @@ function App() {
           <form onSubmit={shareActivity} style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
             <input 
               type="email" 
-              placeholder="输入对方的 Google 邮箱" 
+              placeholder={t.shareEmailPlaceholder} 
               value={shareEmail}
               onChange={e => setShareEmail(e.target.value)}
               required
             />
-            <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>添加</button>
+            <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>{t.addBtn}</button>
           </form>
 
-          <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>已分享的成员：</h4>
+          <h4 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '10px' }}>{t.sharedMembers}</h4>
           {sharedUsers.length === 0 ? (
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>尚未分享给任何人</p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{t.notSharedYet}</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {sharedUsers.map(user => (
@@ -476,13 +595,13 @@ function App() {
       
       <div className="tabs">
         <div className={`tab ${activeTab === 'families' ? 'active' : ''}`} onClick={() => setActiveTab('families')}>
-          <Users size={18} style={{ marginBottom: '-3px', marginRight: '4px' }} /> 家庭
+          <Users size={18} style={{ marginBottom: '-3px', marginRight: '4px' }} /> {t.tabFamilies}
         </div>
         <div className={`tab ${activeTab === 'expenses' ? 'active' : ''}`} onClick={() => setActiveTab('expenses')}>
-          <Receipt size={18} style={{ marginBottom: '-3px', marginRight: '4px' }} /> 账单
+          <Receipt size={18} style={{ marginBottom: '-3px', marginRight: '4px' }} /> {t.tabExpenses}
         </div>
         <div className={`tab ${activeTab === 'settlement' ? 'active' : ''}`} onClick={() => setActiveTab('settlement')}>
-          <Calculator size={18} style={{ marginBottom: '-3px', marginRight: '4px' }} /> 结算
+          <Calculator size={18} style={{ marginBottom: '-3px', marginRight: '4px' }} /> {t.tabSettlement}
         </div>
       </div>
 
@@ -490,11 +609,11 @@ function App() {
       {activeTab === 'families' && (
         <div>
           <form onSubmit={addFamily} className="form-group glass-panel" style={{ padding: '20px' }}>
-            <h3>添加家庭</h3>
+            <h3>{t.addFamilyTitle}</h3>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <input 
                 type="text" 
-                placeholder="名称 (如 A家)" 
+                placeholder={t.familyNamePlaceholder} 
                 value={newFamilyName}
                 onChange={e => setNewFamilyName(e.target.value)}
               />
@@ -502,16 +621,16 @@ function App() {
                 <input 
                   type="number" 
                   min="1"
-                  placeholder="人数" 
+                  placeholder={t.membersPlaceholder} 
                   value={newFamilyMembers}
                   onChange={e => setNewFamilyMembers(e.target.value)}
                   style={{ width: '80px' }}
                 />
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>人(用于平摊)</span>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{t.membersSuffix}</span>
               </div>
             </div>
             <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>
-              <Plus size={18} /> 添加
+              <Plus size={18} /> {t.addBtn}
             </button>
           </form>
 
@@ -520,7 +639,7 @@ function App() {
               <div key={f.id} className="list-item">
                 <div className="item-info">
                   <h4>{f.name}</h4>
-                  <p>{f.members} 人</p>
+                  <p>{f.members} {t.tabFamilies}</p>
                 </div>
                 <button className="btn btn-icon" onClick={() => deleteFamily(f.id)}>
                   <Trash2 size={18} />
@@ -535,32 +654,32 @@ function App() {
       {activeTab === 'expenses' && (
         <div>
           <form onSubmit={saveExpense} className="form-group glass-panel" style={{ padding: '20px' }}>
-            <h3>{editingExpId ? '修改账单' : '记一笔账'}</h3>
+            <h3>{editingExpId ? t.editExpenseTitle : t.addExpenseTitle}</h3>
             <input 
               type="text" 
-              placeholder="项目名称 (如 吃饭, 租车)" 
+              placeholder={t.expenseNamePlaceholder} 
               value={newExpName}
               onChange={e => setNewExpName(e.target.value)}
               style={{ marginBottom: '10px' }}
             />
             <input 
               type="number" 
-              placeholder="总金额" 
+              placeholder={t.expenseAmountPlaceholder} 
               value={newExpAmount}
               onChange={e => setNewExpAmount(e.target.value)}
               style={{ marginBottom: '10px' }}
             />
             
-            <label>谁付款的？</label>
+            <label>{t.whoPaid}</label>
             <select value={newExpPayer} onChange={e => setNewExpPayer(e.target.value)} style={{ marginBottom: '10px' }}>
-              <option value="">请选择付款人</option>
+              <option value="">{t.selectPayer}</option>
               {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <label style={{ marginBottom: 0 }}>谁参与了？ (按家庭人头平摊)</label>
+              <label style={{ marginBottom: 0 }}>{t.whoParticipated}</label>
               <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }} onClick={selectAllParticipants}>
-                <CheckSquare size={14} style={{ marginRight: '4px', marginBottom: '-2px' }} /> 全选
+                <CheckSquare size={14} style={{ marginRight: '4px', marginBottom: '-2px' }} /> {t.selectAll}
               </button>
             </div>
             
@@ -571,18 +690,18 @@ function App() {
                   className={`badge ${newExpParticipants.includes(f.id) ? 'selected' : ''}`}
                   onClick={() => toggleParticipant(f.id)}
                 >
-                  {f.name} ({f.members}人)
+                  {f.name} ({f.members}{lang === 'zh' ? '人' : ''})
                 </div>
               ))}
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
               <button type="submit" className="btn btn-primary">
-                {editingExpId ? <Edit2 size={18} /> : <Plus size={18} />} {editingExpId ? '保存修改' : '记账'}
+                {editingExpId ? <Edit2 size={18} /> : <Plus size={18} />} {editingExpId ? t.saveChanges : t.addExpenseBtn}
               </button>
               {editingExpId && (
                 <button type="button" className="btn" onClick={cancelEditExpense} style={{ background: 'var(--bg-color)', color: 'var(--text-color)' }}>
-                  取消
+                  {t.cancel}
                 </button>
               )}
             </div>
@@ -590,7 +709,7 @@ function App() {
 
           <div className="list-container">
             {expenses.map(e => {
-              const payer = families.find(f => f.id === e.payer_id)?.name || '未知';
+              const payer = families.find(f => f.id === e.payer_id)?.name || t.unknown;
               const participantNames = e.participant_ids
                 .map(id => families.find(f => f.id === id)?.name)
                 .filter(Boolean)
@@ -600,7 +719,7 @@ function App() {
                 <div key={e.id} className="list-item">
                   <div className="item-info">
                     <h4>{e.name}</h4>
-                    <p>{payer} 付款 • 参与: {participantNames || '无'}</p>
+                    <p>{t.payerAndParticipants(payer, participantNames)}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div className="item-amount">¥{e.amount}</div>
@@ -621,14 +740,14 @@ function App() {
       {/* SETTLEMENT TAB */}
       {activeTab === 'settlement' && (
         <div>
-          <h3>最优结算方案</h3>
+          <h3>{t.optimalSettlement}</h3>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '0.9rem' }}>
-            根据每个人头的花费，计算出的最少转账次数方案。
+            {t.optimalSettlementDesc}
           </p>
 
           {transactions.length === 0 ? (
             <div className="glass-panel" style={{ textAlign: 'center' }}>
-              <p>🎉 账目已结清，大家互不相欠！</p>
+              <p>{t.allSettled}</p>
             </div>
           ) : (
             transactions.map((tx, idx) => (
@@ -643,7 +762,7 @@ function App() {
             ))
           )}
 
-          <h3 style={{ marginTop: '30px' }}>家庭净余额</h3>
+          <h3 style={{ marginTop: '30px' }}>{t.familyNetBalance}</h3>
           <div className="glass-panel" style={{ padding: '15px' }}>
             {families.map(f => {
               const bal = balances[f.id] || 0;
