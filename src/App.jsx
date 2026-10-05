@@ -361,7 +361,7 @@ function App() {
     await supabase.from('activity_shares').delete().eq('id', id);
   };
 
-  // Join Bill by Share Code
+  // Join Bill by Share Code (uses RPC to bypass RLS)
   const joinBill = async (e) => {
     e.preventDefault();
     if (!joinCode.trim() || !session?.user) return;
@@ -369,46 +369,23 @@ function App() {
 
     const code = joinCode.trim().toUpperCase();
 
-    // Look up activity by share_code
-    const { data: activity, error: lookupError } = await supabase
-      .from('activities')
-      .select('*')
-      .eq('share_code', code)
-      .single();
+    const { data, error } = await supabase.rpc('join_bill_by_code', {
+      code: code,
+      user_email: session.user.email
+    });
 
-    if (lookupError || !activity) {
+    if (error) {
+      setJoinMessage({ type: 'error', text: t.joinErrorFailed });
+      return;
+    }
+
+    if (data?.error === 'not_found') {
       setJoinMessage({ type: 'error', text: t.joinErrorNotFound });
       return;
     }
 
-    // Check if user is the owner
-    if (activity.owner_id === session.user.id) {
+    if (data?.error === 'already_joined') {
       setJoinMessage({ type: 'error', text: t.joinErrorAlreadyIn });
-      return;
-    }
-
-    // Check if already shared
-    const { data: existing } = await supabase
-      .from('activity_shares')
-      .select('id')
-      .eq('activity_id', activity.id)
-      .eq('shared_with_email', session.user.email)
-      .single();
-
-    if (existing) {
-      setJoinMessage({ type: 'error', text: t.joinErrorAlreadyIn });
-      return;
-    }
-
-    // Create share entry
-    const { error: joinError } = await supabase.from('activity_shares').insert([{
-      activity_id: activity.id,
-      shared_with_email: session.user.email,
-      can_share: false
-    }]);
-
-    if (joinError) {
-      setJoinMessage({ type: 'error', text: t.joinErrorFailed });
       return;
     }
 
