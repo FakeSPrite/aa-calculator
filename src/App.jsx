@@ -150,6 +150,8 @@ function App() {
   const [newActivityName, setNewActivityName] = useState('');
   const [isEditingActivityName, setIsEditingActivityName] = useState(false);
   const [editActivityName, setEditActivityName] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showJoinForm, setShowJoinForm] = useState(false);
 
   // Internal Tabs State (families, expenses, settlement)
   const [activeTab, setActiveTab] = useState('families');
@@ -587,54 +589,87 @@ function App() {
           </div>
         </div>
         
-        <form onSubmit={createActivity} className="form-group glass-panel" style={{ padding: '20px' }}>
-          <h3>{t.createActivityTitle}</h3>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input 
-              type="text" 
-              placeholder={t.activityNamePlaceholder} 
-              value={newActivityName}
-              onChange={e => setNewActivityName(e.target.value)}
-            />
-            <button type="submit" className="btn btn-primary" style={{ width: 'auto' }}>
-              <Plus size={18} />
-            </button>
-          </div>
-        </form>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '16px' }}>
+          <button 
+            className="btn" 
+            onClick={() => { setShowCreateForm(!showCreateForm); setShowJoinForm(false); }}
+            style={{ 
+              flex: 1, 
+              padding: '10px 16px', 
+              fontSize: '0.9rem', 
+              background: showCreateForm ? 'var(--primary-color)' : 'rgba(255,255,255,0.5)', 
+              color: showCreateForm ? 'white' : 'var(--text-primary)',
+              border: '1px solid rgba(255,255,255,0.6)'
+            }}
+          >
+            <Plus size={16} /> {t.createActivityTitle}
+          </button>
+          <button 
+            className="btn" 
+            onClick={() => { setShowJoinForm(!showJoinForm); setShowCreateForm(false); }}
+            style={{ 
+              flex: 1, 
+              padding: '10px 16px', 
+              fontSize: '0.9rem', 
+              background: showJoinForm ? 'var(--primary-color)' : 'rgba(255,255,255,0.5)', 
+              color: showJoinForm ? 'white' : 'var(--text-primary)',
+              border: '1px solid rgba(255,255,255,0.6)'
+            }}
+          >
+            <Link size={16} /> {t.joinBillTitle}
+          </button>
+        </div>
 
-        <form onSubmit={joinBill} className="form-group glass-panel" style={{ padding: '20px' }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Link size={20} color="var(--primary-color)" />
-            {t.joinBillTitle}
-          </h3>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <input 
-              type="text" 
-              placeholder={t.joinBillPlaceholder} 
-              value={joinCode}
-              onChange={e => setJoinCode(e.target.value.toUpperCase())}
-              maxLength={6}
-              style={{ letterSpacing: '3px', fontWeight: '700', textAlign: 'center', fontSize: '1.1rem' }}
-            />
-            <button type="submit" className="btn btn-primary" style={{ width: 'auto', minWidth: '80px' }}>
-              {t.joinBtn}
-            </button>
-          </div>
-          {joinMessage && (
-            <div style={{ 
-              marginTop: '10px', 
-              padding: '10px 14px', 
-              borderRadius: '10px', 
-              fontSize: '0.9rem',
-              fontWeight: '600',
-              background: joinMessage.type === 'success' ? 'rgba(72, 187, 120, 0.15)' : 'rgba(245, 101, 101, 0.15)',
-              color: joinMessage.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)',
-              border: `1px solid ${joinMessage.type === 'success' ? 'rgba(72, 187, 120, 0.3)' : 'rgba(245, 101, 101, 0.3)'}`
-            }}>
-              {joinMessage.text}
+        {showCreateForm && (
+          <form onSubmit={createActivity} className="form-group glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text" 
+                placeholder={t.activityNamePlaceholder} 
+                value={newActivityName}
+                onChange={e => setNewActivityName(e.target.value)}
+                autoFocus
+                style={{ padding: '10px 14px' }}
+              />
+              <button type="submit" className="btn btn-primary" style={{ width: 'auto', padding: '10px 16px' }}>
+                <Plus size={16} />
+              </button>
             </div>
-          )}
-        </form>
+          </form>
+        )}
+
+        {showJoinForm && (
+          <form onSubmit={joinBill} className="form-group glass-panel" style={{ padding: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <input 
+                type="text" 
+                placeholder={t.joinBillPlaceholder} 
+                value={joinCode}
+                onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                maxLength={6}
+                autoFocus
+                style={{ letterSpacing: '3px', fontWeight: '700', textAlign: 'center', fontSize: '1rem', padding: '10px 14px' }}
+              />
+              <button type="submit" className="btn btn-primary" style={{ width: 'auto', minWidth: '70px', padding: '10px 16px' }}>
+                {t.joinBtn}
+              </button>
+            </div>
+            {joinMessage && (
+              <div style={{ 
+                marginTop: '10px', 
+                padding: '8px 12px', 
+                borderRadius: '10px', 
+                fontSize: '0.85rem',
+                fontWeight: '600',
+                background: joinMessage.type === 'success' ? 'rgba(72, 187, 120, 0.15)' : 'rgba(245, 101, 101, 0.15)',
+                color: joinMessage.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)',
+                border: `1px solid ${joinMessage.type === 'success' ? 'rgba(72, 187, 120, 0.3)' : 'rgba(245, 101, 101, 0.3)'}`
+              }}>
+                {joinMessage.text}
+              </div>
+            )}
+          </form>
+        )}
 
         <h3 style={{ marginTop: '20px' }}>{t.allActivities}</h3>
         <div className="list-container">
