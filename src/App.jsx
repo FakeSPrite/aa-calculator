@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe } from 'lucide-react';
+import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe, Copy, Link } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { calculateBalances } from './calculator';
 import './index.css';
@@ -54,6 +54,17 @@ const i18n = {
     allowShare: '允许其继续分享',
     canShareTag: '可分享',
     cannotShareTag: '不可分享',
+    joinBillTitle: '加入已有账本',
+    joinBillPlaceholder: '输入分享码 (如 A3F2B1)',
+    joinBtn: '加入',
+    joinSuccess: '成功加入账本！',
+    joinErrorNotFound: '未找到该分享码对应的账本',
+    joinErrorAlreadyIn: '你已经在这个账本中了',
+    joinErrorFailed: '加入失败，请重试',
+    shareCode: '分享码',
+    shareCodeDesc: '分享此码给好友，他们可以直接加入此账本',
+    copied: '已复制！',
+    copyCode: '复制',
   },
   en: {
     appName: '🏖️ AA Calculator',
@@ -104,6 +115,17 @@ const i18n = {
     allowShare: 'Allow them to share',
     canShareTag: 'Can share',
     cannotShareTag: 'Cannot share',
+    joinBillTitle: 'Join an existing bill',
+    joinBillPlaceholder: 'Enter share code (e.g. A3F2B1)',
+    joinBtn: 'Join',
+    joinSuccess: 'Successfully joined the bill!',
+    joinErrorNotFound: 'No bill found with this share code',
+    joinErrorAlreadyIn: 'You are already in this bill',
+    joinErrorFailed: 'Failed to join, please try again',
+    shareCode: 'Share Code',
+    shareCodeDesc: 'Share this code with friends so they can join this bill directly',
+    copied: 'Copied!',
+    copyCode: 'Copy',
   }
 };
 
@@ -152,6 +174,11 @@ function App() {
   const [sharedUsers, setSharedUsers] = useState([]);
   const [currentUserShareInfo, setCurrentUserShareInfo] = useState(null);
 
+  // Join Bill State
+  const [joinCode, setJoinCode] = useState('');
+  const [joinMessage, setJoinMessage] = useState(null); // { type: 'success'|'error', text: '' }
+  const [shareCodeCopied, setShareCodeCopied] = useState(false);
+
   // Check auth
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -195,13 +222,23 @@ function App() {
     }
   }, [session]);
 
+  const generateShareCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 to avoid confusion
+    let code = '';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
   const createActivity = async (e) => {
     e.preventDefault();
     if (!newActivityName || !session?.user) return;
     const { data, error } = await supabase.from('activities').insert([{ 
       name: newActivityName,
       owner_id: session.user.id,
-      owner_email: session.user.email
+      owner_email: session.user.email,
+      share_code: generateShareCode()
     }]).select();
     if (!error && data) {
       setActivities([data[0], ...activities]);
@@ -322,6 +359,81 @@ function App() {
   const removeShare = async (id) => {
     setSharedUsers(prev => prev.filter(s => s.id !== id));
     await supabase.from('activity_shares').delete().eq('id', id);
+  };
+
+  // Join Bill by Share Code
+  const joinBill = async (e) => {
+    e.preventDefault();
+    if (!joinCode.trim() || !session?.user) return;
+    setJoinMessage(null);
+
+    const code = joinCode.trim().toUpperCase();
+
+    // Look up activity by share_code
+    const { data: activity, error: lookupError } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('share_code', code)
+      .single();
+
+    if (lookupError || !activity) {
+      setJoinMessage({ type: 'error', text: t.joinErrorNotFound });
+      return;
+    }
+
+    // Check if user is the owner
+    if (activity.owner_id === session.user.id) {
+      setJoinMessage({ type: 'error', text: t.joinErrorAlreadyIn });
+      return;
+    }
+
+    // Check if already shared
+    const { data: existing } = await supabase
+      .from('activity_shares')
+      .select('id')
+      .eq('activity_id', activity.id)
+      .eq('shared_with_email', session.user.email)
+      .single();
+
+    if (existing) {
+      setJoinMessage({ type: 'error', text: t.joinErrorAlreadyIn });
+      return;
+    }
+
+    // Create share entry
+    const { error: joinError } = await supabase.from('activity_shares').insert([{
+      activity_id: activity.id,
+      shared_with_email: session.user.email,
+      can_share: false
+    }]);
+
+    if (joinError) {
+      setJoinMessage({ type: 'error', text: t.joinErrorFailed });
+      return;
+    }
+
+    setJoinMessage({ type: 'success', text: t.joinSuccess });
+    setJoinCode('');
+    fetchActivities();
+    setTimeout(() => setJoinMessage(null), 3000);
+  };
+
+  const copyShareCode = async (code) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setShareCodeCopied(true);
+      setTimeout(() => setShareCodeCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = code;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setShareCodeCopied(true);
+      setTimeout(() => setShareCodeCopied(false), 2000);
+    }
   };
 
   const { balances, transactions } = useMemo(() => calculateBalances(families, expenses), [families, expenses]);
@@ -513,6 +625,40 @@ function App() {
           </div>
         </form>
 
+        <form onSubmit={joinBill} className="form-group glass-panel" style={{ padding: '20px' }}>
+          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link size={20} color="var(--primary-color)" />
+            {t.joinBillTitle}
+          </h3>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input 
+              type="text" 
+              placeholder={t.joinBillPlaceholder} 
+              value={joinCode}
+              onChange={e => setJoinCode(e.target.value.toUpperCase())}
+              maxLength={6}
+              style={{ letterSpacing: '3px', fontWeight: '700', textAlign: 'center', fontSize: '1.1rem' }}
+            />
+            <button type="submit" className="btn btn-primary" style={{ width: 'auto', minWidth: '80px' }}>
+              {t.joinBtn}
+            </button>
+          </div>
+          {joinMessage && (
+            <div style={{ 
+              marginTop: '10px', 
+              padding: '10px 14px', 
+              borderRadius: '10px', 
+              fontSize: '0.9rem',
+              fontWeight: '600',
+              background: joinMessage.type === 'success' ? 'rgba(72, 187, 120, 0.15)' : 'rgba(245, 101, 101, 0.15)',
+              color: joinMessage.type === 'success' ? 'var(--success-color)' : 'var(--danger-color)',
+              border: `1px solid ${joinMessage.type === 'success' ? 'rgba(72, 187, 120, 0.3)' : 'rgba(245, 101, 101, 0.3)'}`
+            }}>
+              {joinMessage.text}
+            </div>
+          )}
+        </form>
+
         <h3 style={{ marginTop: '20px' }}>{t.allActivities}</h3>
         <div className="list-container">
           {activities.length === 0 ? (
@@ -598,10 +744,59 @@ function App() {
         <div className="glass-panel" style={{ marginBottom: '20px', background: 'rgba(255,255,255,0.8)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <h3 style={{ margin: 0 }}>{t.shareToOthers}</h3>
-            <button className="btn btn-icon" onClick={() => setShowShareModal(false)}>
+            <button className="btn btn-icon" onClick={() => { setShowShareModal(false); setShareCodeCopied(false); }}>
               <X size={18} />
             </button>
           </div>
+
+          {/* Share Code Display */}
+          {currentActivity.share_code && (
+            <div style={{ 
+              marginBottom: '20px', 
+              padding: '16px', 
+              background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%)',
+              borderRadius: '14px',
+              border: '1px dashed rgba(102, 126, 234, 0.3)'
+            }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '600' }}>
+                {t.shareCode}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ 
+                  flex: 1,
+                  fontSize: '1.8rem', 
+                  fontWeight: '800', 
+                  letterSpacing: '6px', 
+                  color: 'var(--primary-color)',
+                  textAlign: 'center',
+                  fontFamily: 'monospace'
+                }}>
+                  {currentActivity.share_code}
+                </div>
+                <button 
+                  className="btn" 
+                  onClick={() => copyShareCode(currentActivity.share_code)}
+                  style={{ 
+                    width: 'auto', 
+                    padding: '8px 14px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '5px',
+                    background: shareCodeCopied ? 'var(--success-color)' : 'var(--primary-color)', 
+                    color: 'white',
+                    fontSize: '0.85rem',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  <Copy size={14} />
+                  {shareCodeCopied ? t.copied : t.copyCode}
+                </button>
+              </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '8px', textAlign: 'center' }}>
+                {t.shareCodeDesc}
+              </p>
+            </div>
+          )}
           <form onSubmit={shareActivity} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '15px' }}>
             <div style={{ display: 'flex', gap: '10px' }}>
               <input 
