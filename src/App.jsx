@@ -166,6 +166,9 @@ function App() {
   const [newFamilyName, setNewFamilyName] = useState('');
   const [newFamilyMembers, setNewFamilyMembers] = useState(1);
   const [showAddFamilyForm, setShowAddFamilyForm] = useState(false);
+  const [editingFamilyId, setEditingFamilyId] = useState(null);
+  const [editFamilyName, setEditFamilyName] = useState('');
+  const [showAddExpenseForm, setShowAddExpenseForm] = useState(false);
   const [newExpName, setNewExpName] = useState('');
   const [newExpAmount, setNewExpAmount] = useState('');
   const [newExpPayer, setNewExpPayer] = useState('');
@@ -447,6 +450,14 @@ function App() {
     await supabase.from('families').delete().eq('id', id);
   };
 
+  const saveFamilyName = async (id) => {
+    if (!editFamilyName.trim()) return;
+    setFamilies(prev => prev.map(f => f.id === id ? { ...f, name: editFamilyName } : f));
+    setEditingFamilyId(null);
+    setEditFamilyName('');
+    await supabase.from('families').update({ name: editFamilyName }).eq('id', id);
+  };
+
   const saveExpense = async (e) => {
     e.preventDefault();
     if (!newExpName || !newExpAmount || !newExpPayer || newExpParticipants.length === 0) return;
@@ -489,6 +500,7 @@ function App() {
     setNewExpAmount(exp.amount.toString());
     setNewExpPayer(exp.payer_id);
     setNewExpParticipants(exp.participant_ids);
+    setShowAddExpenseForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -498,6 +510,7 @@ function App() {
     setNewExpAmount('');
     setNewExpPayer('');
     setNewExpParticipants([]);
+    setShowAddExpenseForm(false);
   };
 
   const toggleParticipant = (id) => {
@@ -956,13 +969,36 @@ function App() {
           <div className="list-container">
             {families.map(f => (
               <div key={f.id} className="list-item">
-                <div className="item-info">
-                  <h4>{f.name}</h4>
-                  <p>{f.members} {t.tabFamilies}</p>
+                <div className="item-info" style={{ flex: 1, minWidth: 0 }}>
+                  {editingFamilyId === f.id ? (
+                    <form onSubmit={(e) => { e.preventDefault(); saveFamilyName(f.id); }} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        value={editFamilyName}
+                        onChange={e => setEditFamilyName(e.target.value)}
+                        autoFocus
+                        style={{ padding: '4px 8px', flex: 1 }}
+                      />
+                      <button type="submit" className="btn btn-primary" style={{ padding: '4px 10px', width: 'auto', fontSize: '0.8rem' }}>{t.save}</button>
+                      <button type="button" className="btn" onClick={() => { setEditingFamilyId(null); setEditFamilyName(''); }} style={{ padding: '4px 10px', width: 'auto', fontSize: '0.8rem' }}>{t.cancel}</button>
+                    </form>
+                  ) : (
+                    <>
+                      <h4>{f.name}</h4>
+                      <p>{f.members} {t.tabFamilies}</p>
+                    </>
+                  )}
                 </div>
-                <button className="btn btn-icon" onClick={() => deleteFamily(f.id)}>
-                  <Trash2 size={18} />
-                </button>
+                {editingFamilyId !== f.id && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <button className="btn btn-icon" onClick={() => { setEditingFamilyId(f.id); setEditFamilyName(f.name); }} style={{ color: 'var(--primary-color)' }}>
+                      <Edit2 size={18} />
+                    </button>
+                    <button className="btn btn-icon" onClick={() => deleteFamily(f.id)}>
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -972,59 +1008,76 @@ function App() {
       {/* EXPENSES TAB */}
       {activeTab === 'expenses' && (
         <div>
-          <form onSubmit={saveExpense} className="form-group glass-panel" style={{ padding: '20px' }}>
-            <h3>{editingExpId ? t.editExpenseTitle : t.addExpenseTitle}</h3>
-            <input 
-              type="text" 
-              placeholder={t.expenseNamePlaceholder} 
-              value={newExpName}
-              onChange={e => setNewExpName(e.target.value)}
-              style={{ marginBottom: '10px' }}
-            />
-            <input 
-              type="number" 
-              placeholder={t.expenseAmountPlaceholder} 
-              value={newExpAmount}
-              onChange={e => setNewExpAmount(e.target.value)}
-              style={{ marginBottom: '10px' }}
-            />
-            
-            <label>{t.whoPaid}</label>
-            <select value={newExpPayer} onChange={e => setNewExpPayer(e.target.value)} style={{ marginBottom: '10px' }}>
-              <option value="">{t.selectPayer}</option>
-              {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
+          <button 
+            className="btn" 
+            onClick={() => { if (editingExpId) cancelEditExpense(); else setShowAddExpenseForm(!showAddExpenseForm); }}
+            style={{ 
+              padding: '10px 16px', 
+              fontSize: '0.9rem', 
+              marginBottom: '12px',
+              background: showAddExpenseForm ? 'var(--primary-color)' : 'rgba(255,255,255,0.5)', 
+              color: showAddExpenseForm ? 'white' : 'var(--text-primary)',
+              border: '1px solid rgba(255,255,255,0.6)'
+            }}
+          >
+            <Plus size={16} /> {t.addExpenseTitle}
+          </button>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-              <label style={{ marginBottom: 0 }}>{t.whoParticipated}</label>
-              <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }} onClick={selectAllParticipants}>
-                <CheckSquare size={14} style={{ marginRight: '4px', marginBottom: '-2px' }} /> {t.selectAll}
-              </button>
-            </div>
-            
-            <div className="badges-container" style={{ marginBottom: '15px' }}>
-              {families.map(f => (
-                <div 
-                  key={f.id} 
-                  className={`badge ${newExpParticipants.includes(f.id) ? 'selected' : ''}`}
-                  onClick={() => toggleParticipant(f.id)}
-                >
-                  {f.name} ({f.members}{lang === 'zh' ? '人' : ''})
-                </div>
-              ))}
-            </div>
+          {showAddExpenseForm && (
+            <form onSubmit={saveExpense} className="form-group glass-panel" style={{ padding: '20px', marginBottom: '12px' }}>
+              <h3>{editingExpId ? t.editExpenseTitle : t.addExpenseTitle}</h3>
+              <input 
+                type="text" 
+                placeholder={t.expenseNamePlaceholder} 
+                value={newExpName}
+                onChange={e => setNewExpName(e.target.value)}
+                style={{ marginBottom: '10px' }}
+              />
+              <input 
+                type="number" 
+                placeholder={t.expenseAmountPlaceholder} 
+                value={newExpAmount}
+                onChange={e => setNewExpAmount(e.target.value)}
+                style={{ marginBottom: '10px' }}
+              />
+              
+              <label>{t.whoPaid}</label>
+              <select value={newExpPayer} onChange={e => setNewExpPayer(e.target.value)} style={{ marginBottom: '10px' }}>
+                <option value="">{t.selectPayer}</option>
+                {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button type="submit" className="btn btn-primary">
-                {editingExpId ? <Edit2 size={18} /> : <Plus size={18} />} {editingExpId ? t.saveChanges : t.addExpenseBtn}
-              </button>
-              {editingExpId && (
-                <button type="button" className="btn" onClick={cancelEditExpense} style={{ background: 'var(--bg-color)', color: 'var(--text-color)' }}>
-                  {t.cancel}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <label style={{ marginBottom: 0 }}>{t.whoParticipated}</label>
+                <button type="button" className="btn" style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto' }} onClick={selectAllParticipants}>
+                  <CheckSquare size={14} style={{ marginRight: '4px', marginBottom: '-2px' }} /> {t.selectAll}
                 </button>
-              )}
-            </div>
-          </form>
+              </div>
+              
+              <div className="badges-container" style={{ marginBottom: '15px' }}>
+                {families.map(f => (
+                  <div 
+                    key={f.id} 
+                    className={`badge ${newExpParticipants.includes(f.id) ? 'selected' : ''}`}
+                    onClick={() => toggleParticipant(f.id)}
+                  >
+                    {f.name} ({f.members}{lang === 'zh' ? '人' : ''})
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="submit" className="btn btn-primary">
+                  {editingExpId ? <Edit2 size={18} /> : <Plus size={18} />} {editingExpId ? t.saveChanges : t.addExpenseBtn}
+                </button>
+                {editingExpId && (
+                  <button type="button" className="btn" onClick={cancelEditExpense} style={{ background: 'var(--bg-color)', color: 'var(--text-color)' }}>
+                    {t.cancel}
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
 
           <div className="list-container">
             {expenses.map(e => {
@@ -1044,7 +1097,7 @@ function App() {
                     <p>{t.payerAndParticipants(payer, participantNames)}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div className="item-amount">¥{e.amount}</div>
+                    <div className="item-amount">${e.amount}</div>
                     <button className="btn btn-icon" onClick={() => startEditExpense(e)} style={{ color: 'var(--primary-color)' }}>
                       <Edit2 size={18} />
                     </button>
@@ -1079,7 +1132,7 @@ function App() {
                   <ArrowRight className="transaction-arrow" size={24} />
                   <span>{tx.to.name}</span>
                 </div>
-                <div className="transaction-amount">¥{tx.amount}</div>
+                <div className="transaction-amount">${tx.amount}</div>
               </div>
             ))
           )}
