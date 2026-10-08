@@ -156,7 +156,7 @@ function App() {
   const [showJoinForm, setShowJoinForm] = useState(false);
 
   // Internal Tabs State (families, expenses, settlement)
-  const [activeTab, setActiveTab] = useState('families');
+  const [activeTab, setActiveTab] = useState('expenses');
   
   // Data States
   const [families, setFamilies] = useState([]);
@@ -701,7 +701,7 @@ function App() {
             activities.map(act => {
               const isOwner = act.owner_id === session.user.id;
               return (
-                <div key={act.id} className="list-item" onClick={() => setCurrentActivity(act)} style={{ cursor: 'pointer' }}>
+                <div key={act.id} className="list-item" onClick={() => { setCurrentActivity(act); setActiveTab('expenses'); }} style={{ cursor: 'pointer' }}>
                   <div className="item-info" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <FolderOpen size={20} color="var(--primary-color)" />
                     <div>
