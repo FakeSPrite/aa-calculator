@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe, Copy, Link } from 'lucide-react';
+import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe, Copy, Link, Search, Filter } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { calculateBalances } from './calculator';
 import './index.css';
@@ -55,6 +55,8 @@ const i18n = {
     allowShare: '允许其继续分享',
     canShareTag: '可分享',
     cannotShareTag: '不可分享',
+    searchExpensePlaceholder: '搜索账单名称...',
+    allPayers: '全部付款人',
     joinBillTitle: '加入已有账本',
     joinBillPlaceholder: '输入分享码 (如 A3F2B1)',
     joinBtn: '加入',
@@ -117,6 +119,8 @@ const i18n = {
     allowShare: 'Allow them to share',
     canShareTag: 'Can share',
     cannotShareTag: 'Cannot share',
+    searchExpensePlaceholder: 'Search expenses...',
+    allPayers: 'All payers',
     joinBillTitle: 'Join an existing bill',
     joinBillPlaceholder: 'Enter share code (e.g. A3F2B1)',
     joinBtn: 'Join',
@@ -174,6 +178,8 @@ function App() {
   const [newExpPayer, setNewExpPayer] = useState('');
   const [newExpParticipants, setNewExpParticipants] = useState([]);
   const [editingExpId, setEditingExpId] = useState(null);
+  const [searchExpQuery, setSearchExpQuery] = useState('');
+  const [filterExpPayer, setFilterExpPayer] = useState('');
 
   // Share Modal State
   const [showShareModal, setShowShareModal] = useState(false);
@@ -1079,8 +1085,40 @@ function App() {
             </form>
           )}
 
+          {expenses.length > 0 && (
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <Search size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '10px', top: '10px' }} />
+                <input 
+                  type="text" 
+                  placeholder={t.searchExpensePlaceholder} 
+                  value={searchExpQuery}
+                  onChange={e => setSearchExpQuery(e.target.value)}
+                  style={{ width: '100%', paddingLeft: '32px' }}
+                />
+              </div>
+              <div style={{ position: 'relative', width: '140px' }}>
+                <Filter size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '10px', top: '10px' }} />
+                <select 
+                  value={filterExpPayer} 
+                  onChange={e => setFilterExpPayer(e.target.value)} 
+                  style={{ width: '100%', paddingLeft: '32px', appearance: 'none' }}
+                >
+                  <option value="">{t.allPayers}</option>
+                  {families.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div className="list-container">
-            {expenses.map(e => {
+            {expenses
+              .filter(e => {
+                const matchesSearch = e.name.toLowerCase().includes(searchExpQuery.toLowerCase());
+                const matchesPayer = filterExpPayer ? e.payer_id === filterExpPayer : true;
+                return matchesSearch && matchesPayer;
+              })
+              .map(e => {
               const payer = families.find(f => f.id === e.payer_id)?.name || t.unknown;
               const isAllParticipants = families.length > 0 && families.every(f => e.participant_ids.includes(f.id));
               const participantNames = isAllParticipants
