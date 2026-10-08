@@ -46,6 +46,7 @@ const i18n = {
     saveChanges: '保存修改',
     addExpenseBtn: '记账',
     payerAndParticipants: (payer, participants) => `${payer} 付款 • 参与: ${participants || '无'}`,
+    everyone: '全员',
     unknown: '未知',
     optimalSettlement: '最优结算方案',
     optimalSettlementDesc: '根据每个人头的花费，计算出的最少转账次数方案。',
@@ -107,6 +108,7 @@ const i18n = {
     saveChanges: 'Save changes',
     addExpenseBtn: 'Add expense',
     payerAndParticipants: (payer, participants) => `Paid by ${payer} • Participants: ${participants || 'None'}`,
+    everyone: 'Everyone',
     unknown: 'Unknown',
     optimalSettlement: 'Optimal Settlement Plan',
     optimalSettlementDesc: 'The least number of transactions based on per-person spending.',
@@ -163,6 +165,7 @@ function App() {
   // Form States
   const [newFamilyName, setNewFamilyName] = useState('');
   const [newFamilyMembers, setNewFamilyMembers] = useState(1);
+  const [showAddFamilyForm, setShowAddFamilyForm] = useState(false);
   const [newExpName, setNewExpName] = useState('');
   const [newExpAmount, setNewExpAmount] = useState('');
   const [newExpPayer, setNewExpPayer] = useState('');
@@ -361,6 +364,12 @@ function App() {
   const removeShare = async (id) => {
     setSharedUsers(prev => prev.filter(s => s.id !== id));
     await supabase.from('activity_shares').delete().eq('id', id);
+  };
+
+  const toggleSharePermission = async (shareId, currentValue) => {
+    const newValue = !currentValue;
+    setSharedUsers(prev => prev.map(s => s.id === shareId ? { ...s, can_share: newValue } : s));
+    await supabase.from('activity_shares').update({ can_share: newValue }).eq('id', shareId);
   };
 
   // Join Bill by Share Code (uses RPC to bypass RLS)
@@ -837,18 +846,47 @@ function App() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
               {sharedUsers.map(user => (
-                <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', background: 'var(--bg-color)', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: '0.9rem' }}>{user.shared_with_email}</span>
-                    <span style={{ fontSize: '0.75rem', color: user.can_share ? 'var(--success-color)' : 'var(--text-secondary)' }}>
-                      {user.can_share ? t.canShareTag : t.cannotShareTag}
-                    </span>
+                <div key={user.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'var(--bg-color)', borderRadius: '10px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.shared_with_email}</span>
                   </div>
-                  {hasSharePermission && (
-                    <button className="btn btn-icon" onClick={() => removeShare(user.id)} style={{ color: 'var(--danger-color)' }}>
-                      <Trash2 size={16} />
-                    </button>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+                    {isOwner && (
+                      <div 
+                        onClick={() => toggleSharePermission(user.id, user.can_share)} 
+                        title={t.allowShare}
+                        style={{ 
+                          display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', userSelect: 'none'
+                        }}
+                      >
+                        <span style={{ fontSize: '0.75rem', color: user.can_share ? 'var(--success-color)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                          {user.can_share ? t.canShareTag : t.cannotShareTag}
+                        </span>
+                        <div style={{
+                          width: '36px', height: '20px', borderRadius: '10px', padding: '2px',
+                          background: user.can_share ? 'var(--success-color)' : 'rgba(0,0,0,0.15)',
+                          transition: 'background 0.25s ease', position: 'relative', flexShrink: 0
+                        }}>
+                          <div style={{
+                            width: '16px', height: '16px', borderRadius: '50%', background: 'white',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                            transition: 'transform 0.25s ease',
+                            transform: user.can_share ? 'translateX(16px)' : 'translateX(0)'
+                          }} />
+                        </div>
+                      </div>
+                    )}
+                    {!isOwner && (
+                      <span style={{ fontSize: '0.75rem', color: user.can_share ? 'var(--success-color)' : 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {user.can_share ? t.canShareTag : t.cannotShareTag}
+                      </span>
+                    )}
+                    {isOwner && (
+                      <button className="btn btn-icon" onClick={() => removeShare(user.id)} style={{ color: 'var(--danger-color)' }}>
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -871,31 +909,49 @@ function App() {
       {/* FAMILIES TAB */}
       {activeTab === 'families' && (
         <div>
-          <form onSubmit={addFamily} className="form-group glass-panel" style={{ padding: '20px' }}>
-            <h3>{t.addFamilyTitle}</h3>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <input 
-                type="text" 
-                placeholder={t.familyNamePlaceholder} 
-                value={newFamilyName}
-                onChange={e => setNewFamilyName(e.target.value)}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <button 
+            className="btn" 
+            onClick={() => setShowAddFamilyForm(!showAddFamilyForm)}
+            style={{ 
+              padding: '10px 16px', 
+              fontSize: '0.9rem', 
+              marginBottom: '12px',
+              background: showAddFamilyForm ? 'var(--primary-color)' : 'rgba(255,255,255,0.5)', 
+              color: showAddFamilyForm ? 'white' : 'var(--text-primary)',
+              border: '1px solid rgba(255,255,255,0.6)'
+            }}
+          >
+            <Plus size={16} /> {t.addFamilyTitle}
+          </button>
+
+          {showAddFamilyForm && (
+            <form onSubmit={addFamily} className="form-group glass-panel" style={{ padding: '16px', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
                 <input 
-                  type="number" 
-                  min="1"
-                  placeholder={t.membersPlaceholder} 
-                  value={newFamilyMembers}
-                  onChange={e => setNewFamilyMembers(e.target.value)}
-                  style={{ width: '80px' }}
+                  type="text" 
+                  placeholder={t.familyNamePlaceholder} 
+                  value={newFamilyName}
+                  onChange={e => setNewFamilyName(e.target.value)}
+                  autoFocus
+                  style={{ padding: '10px 14px' }}
                 />
-                <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>{t.membersSuffix}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input 
+                    type="number" 
+                    min="1"
+                    placeholder={t.membersPlaceholder} 
+                    value={newFamilyMembers}
+                    onChange={e => setNewFamilyMembers(e.target.value)}
+                    style={{ width: '70px', padding: '10px 14px' }}
+                  />
+                  <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{t.membersSuffix}</span>
+                </div>
+                <button type="submit" className="btn btn-primary" style={{ width: 'auto', padding: '10px 16px' }}>
+                  <Plus size={16} />
+                </button>
               </div>
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ marginTop: '10px' }}>
-              <Plus size={18} /> {t.addBtn}
-            </button>
-          </form>
+            </form>
+          )}
 
           <div className="list-container">
             {families.map(f => (
@@ -973,10 +1029,13 @@ function App() {
           <div className="list-container">
             {expenses.map(e => {
               const payer = families.find(f => f.id === e.payer_id)?.name || t.unknown;
-              const participantNames = e.participant_ids
-                .map(id => families.find(f => f.id === id)?.name)
-                .filter(Boolean)
-                .join(', ');
+              const isAllParticipants = families.length > 0 && families.every(f => e.participant_ids.includes(f.id));
+              const participantNames = isAllParticipants
+                ? t.everyone
+                : e.participant_ids
+                    .map(id => families.find(f => f.id === id)?.name)
+                    .filter(Boolean)
+                    .join(', ');
                 
               return (
                 <div key={e.id} className="list-item">
