@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe, Copy, Link, Search, Filter } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Users, Plus, Receipt, Calculator, ArrowRight, Trash2, Home, FolderOpen, Edit2, CheckSquare, LogOut, Share2, X, Globe, Copy, Link, Search, Filter, Download } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { calculateBalances } from './calculator';
 import './index.css';
@@ -68,6 +68,30 @@ const i18n = {
     shareCodeDesc: '分享此码给好友，他们可以直接加入此账本',
     copied: '已复制！',
     copyCode: '复制',
+    expenseSummary: '花销统计',
+    totalExpenses: '总花销',
+    perPersonExpense: '人均花销',
+    totalMembers: '总人数',
+    peopleUnit: '人',
+    exportPdf: '导出结算结果 (PDF)',
+    exportingPdf: '正在生成 PDF...',
+    pdfTitle: 'AA 账单结算单',
+    pdfExportDate: '导出时间',
+    pdfTransfersTitle: '最优结算方案 (最少转账)',
+    pdfBalancesTitle: '各家庭净余额',
+    pdfExpensesTitle: '消费明细记录 (按付款人分类)',
+    pdfExpenseName: '消费项目',
+    pdfPayer: '付款人',
+    pdfParticipants: '参与人',
+    pdfAmount: '金额',
+    pdfFamily: '家庭',
+    pdfMemberCount: '人数',
+    pdfBalance: '净余额',
+    pdfNetReceive: '应收',
+    pdfNetPay: '应付',
+    pdfBalanced: '已结平',
+    pdfPayerSubtotal: '付款小计',
+    itemsUnit: '笔',
   },
   en: {
     appName: '🏖️ AA Calculator',
@@ -132,6 +156,30 @@ const i18n = {
     shareCodeDesc: 'Share this code with friends so they can join this bill directly',
     copied: 'Copied!',
     copyCode: 'Copy',
+    expenseSummary: 'Expense Summary',
+    totalExpenses: 'Total Expenses',
+    perPersonExpense: 'Per-Person Expense',
+    totalMembers: 'Total People',
+    peopleUnit: 'people',
+    exportPdf: 'Export Result (PDF)',
+    exportingPdf: 'Generating PDF...',
+    pdfTitle: 'AA Settlement Statement',
+    pdfExportDate: 'Export Date',
+    pdfTransfersTitle: 'Optimal Settlement Plan',
+    pdfBalancesTitle: 'Family Net Balances',
+    pdfExpensesTitle: 'Expense Details (Grouped by Payer)',
+    pdfExpenseName: 'Item',
+    pdfPayer: 'Payer',
+    pdfParticipants: 'Participants',
+    pdfAmount: 'Amount',
+    pdfFamily: 'Family',
+    pdfMemberCount: 'Members',
+    pdfBalance: 'Net Balance',
+    pdfNetReceive: 'To receive',
+    pdfNetPay: 'To pay',
+    pdfBalanced: 'Settled',
+    pdfPayerSubtotal: 'Subtotal',
+    itemsUnit: 'items',
   }
 };
 
@@ -434,6 +482,94 @@ function App() {
   };
 
   const { balances, transactions } = useMemo(() => calculateBalances(families, expenses), [families, expenses]);
+
+  const totalExpense = useMemo(() => {
+    return expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+  }, [expenses]);
+
+  const totalMembers = useMemo(() => {
+    return families.reduce((sum, f) => sum + (Number(f.members) || 0), 0);
+  }, [families]);
+
+  const perPersonExpense = useMemo(() => {
+    return totalMembers > 0 ? totalExpense / totalMembers : 0;
+  }, [totalExpense, totalMembers]);
+
+  const expensesByPayer = useMemo(() => {
+    const payerMap = new Map();
+    // Maintain the order of families
+    families.forEach(f => {
+      payerMap.set(f.id, {
+        payerId: f.id,
+        payerName: f.name,
+        expenses: [],
+        total: 0
+      });
+    });
+
+    const unknownKey = '__unknown__';
+
+    expenses.forEach(exp => {
+      const key = exp.payer_id && payerMap.has(exp.payer_id) ? exp.payer_id : unknownKey;
+      if (!payerMap.has(key)) {
+        payerMap.set(key, {
+          payerId: key,
+          payerName: t.unknown,
+          expenses: [],
+          total: 0
+        });
+      }
+      const group = payerMap.get(key);
+      group.expenses.push(exp);
+      group.total += Number(exp.amount) || 0;
+    });
+
+    return Array.from(payerMap.values()).filter(g => g.expenses.length > 0);
+  }, [expenses, families, t.unknown]);
+
+  const pdfReportRef = useRef(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  const handleExportPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      if (typeof window.html2pdf !== 'function') {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = '/html2pdf.bundle.min.js';
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load html2pdf'));
+          document.head.appendChild(script);
+        });
+      }
+
+      const element = pdfReportRef.current;
+      if (!element) return;
+
+      const actName = (currentActivity?.name || 'AA').replace(/[/\\?%*:|"<>]/g, '_');
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${actName}_结算单.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          scrollY: 0,
+          scrollX: 0
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] }
+      };
+
+      await window.html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.error('PDF export error:', err);
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
 
   // --- Actions ---
   const addFamily = async (e) => {
@@ -1191,6 +1327,257 @@ function App() {
                 </div>
               )
             })}
+          </div>
+
+          {/* NEW SECTION: 花销统计 (总花销 和 人均花销) */}
+          <h3 style={{ marginTop: '30px' }}>{t.expenseSummary}</h3>
+          <div className="glass-panel" style={{ padding: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '14px' }}>
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.4)',
+                borderRadius: '16px',
+                padding: '16px 12px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.6)'
+              }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {t.totalExpenses}
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--primary-color)' }}>
+                  ${totalExpense.toFixed(2)}
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.4)',
+                borderRadius: '16px',
+                padding: '16px 12px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.6)'
+              }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {t.perPersonExpense}
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--success-color)' }}>
+                  ${perPersonExpense.toFixed(2)}
+                </div>
+              </div>
+
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.4)',
+                borderRadius: '16px',
+                padding: '16px 12px',
+                textAlign: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.6)'
+              }}>
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  {t.totalMembers}
+                </div>
+                <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--text-primary)' }}>
+                  {totalMembers} <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>{t.peopleUnit}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* EXPORT PDF BUTTON */}
+          <div style={{ marginTop: '24px', marginBottom: '24px' }}>
+            <button 
+              className="btn btn-primary"
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              style={{ 
+                fontSize: '1.05rem', 
+                padding: '14px 20px',
+                boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)',
+                opacity: isExportingPdf ? 0.7 : 1
+              }}
+            >
+              <Download size={20} />
+              {isExportingPdf ? t.exportingPdf : t.exportPdf}
+            </button>
+          </div>
+
+          {/* OFFSCREEN PRINTABLE PDF TEMPLATE */}
+          <div style={{ position: 'absolute', left: '-9999px', top: 0, width: '794px' }}>
+            <div 
+              ref={pdfReportRef} 
+              style={{ 
+                background: '#ffffff', 
+                color: '#1a202c', 
+                padding: '36px 40px', 
+                fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+                boxSizing: 'border-box',
+                lineHeight: 1.5
+              }}
+            >
+              {/* Header */}
+              <div style={{ borderBottom: '2px solid #e2e8f0', paddingBottom: '18px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h1 style={{ fontSize: '26px', fontWeight: '800', margin: '0 0 6px 0', color: '#2d3748', background: 'none', WebkitTextFillColor: 'initial', textAlign: 'left' }}>
+                    {t.pdfTitle}
+                  </h1>
+                  <div style={{ fontSize: '18px', fontWeight: '600', color: '#667eea' }}>
+                    {currentActivity?.name}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '13px', color: '#718096' }}>
+                  <div>{t.pdfExportDate}: {new Date().toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { year: 'numeric', month: '2-digit', day: '2-digit' })}</div>
+                  <div style={{ marginTop: '4px', fontSize: '12px' }}>{new Date().toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              </div>
+
+              {/* Key Metrics Summary Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '26px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                <div style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#718096', marginBottom: '4px' }}>{t.totalExpenses}</div>
+                  <div style={{ fontSize: '22px', fontWeight: '800', color: '#667eea' }}>${totalExpense.toFixed(2)}</div>
+                </div>
+                <div style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#718096', marginBottom: '4px' }}>{t.perPersonExpense}</div>
+                  <div style={{ fontSize: '22px', fontWeight: '800', color: '#48bb78' }}>${perPersonExpense.toFixed(2)}</div>
+                </div>
+                <div style={{ background: '#f7fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '14px 16px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '12px', color: '#718096', marginBottom: '4px' }}>{t.totalMembers}</div>
+                  <div style={{ fontSize: '22px', fontWeight: '800', color: '#2d3748' }}>{totalMembers} <span style={{ fontSize: '13px', fontWeight: '500' }}>{t.peopleUnit}</span></div>
+                </div>
+              </div>
+
+              {/* Section 1: 最优结算方案 */}
+              <div style={{ marginBottom: '26px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#2d3748', margin: '0 0 12px 0', borderLeft: '4px solid #667eea', paddingLeft: '10px' }}>
+                  {t.optimalSettlement}
+                </h3>
+                {transactions.length === 0 ? (
+                  <div style={{ background: '#f0fff4', border: '1px solid #c6f6d5', color: '#276749', borderRadius: '8px', padding: '14px', textAlign: 'center', fontSize: '14px', fontWeight: '600' }}>
+                    {t.allSettled}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {transactions.map((tx, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f7fafc', border: '1px solid #edf2f7', borderRadius: '8px', padding: '10px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: '600' }}>
+                          <span style={{ color: '#e53e3e' }}>{tx.from.name}</span>
+                          <span style={{ color: '#a0aec0' }}>➔</span>
+                          <span style={{ color: '#38a169' }}>{tx.to.name}</span>
+                        </div>
+                        <div style={{ fontSize: '16px', fontWeight: '800', color: '#2b6cb0' }}>
+                          ${tx.amount.toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: 各家庭净余额 */}
+              <div style={{ marginBottom: '26px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#2d3748', margin: '0 0 12px 0', borderLeft: '4px solid #48bb78', paddingLeft: '10px' }}>
+                  {t.familyNetBalance}
+                </h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ background: '#edf2f7', color: '#4a5568' }}>
+                      <th style={{ textAlign: 'left', padding: '8px 12px', borderRadius: '6px 0 0 6px' }}>{t.pdfFamily}</th>
+                      <th style={{ textAlign: 'center', padding: '8px 12px' }}>{t.pdfMemberCount}</th>
+                      <th style={{ textAlign: 'right', padding: '8px 12px', borderRadius: '0 6px 6px 0' }}>{t.pdfBalance}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {families.map((f, idx) => {
+                      const bal = balances[f.id] || 0;
+                      return (
+                        <tr key={f.id} style={{ borderBottom: '1px solid #edf2f7', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                          <td style={{ padding: '9px 12px', fontWeight: '600', color: '#2d3748' }}>{f.name}</td>
+                          <td style={{ textAlign: 'center', padding: '9px 12px', color: '#718096' }}>{f.members} {t.peopleUnit}</td>
+                          <td style={{ 
+                            textAlign: 'right', 
+                            padding: '9px 12px', 
+                            fontWeight: '700',
+                            color: bal > 0 ? '#38a169' : bal < 0 ? '#e53e3e' : '#718096' 
+                          }}>
+                            {bal > 0 ? `+${bal.toFixed(2)} (${t.pdfNetReceive})` : bal < 0 ? `${bal.toFixed(2)} (${t.pdfNetPay})` : `$0.00 (${t.pdfBalanced})`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Section 3: 消费账单记录 (按付款人分类) */}
+              {expenses.length > 0 && (
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: '700', color: '#2d3748', margin: '0 0 14px 0', borderLeft: '4px solid #ed8936', paddingLeft: '10px' }}>
+                    {t.pdfExpensesTitle} ({expenses.length})
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {expensesByPayer.map((group) => (
+                      <div key={group.payerId} style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                        {/* Payer Header Banner */}
+                        <div style={{ 
+                          background: '#edf2f7', 
+                          padding: '10px 14px', 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          borderBottom: '1px solid #e2e8f0'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '14px', fontWeight: '700', color: '#2d3748' }}>
+                              💳 {group.payerName}
+                            </span>
+                            <span style={{ fontSize: '12px', color: '#718096', background: '#ffffff', padding: '2px 8px', borderRadius: '12px', border: '1px solid #cbd5e0' }}>
+                              {group.expenses.length} {t.itemsUnit}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#4a5568' }}>
+                            <span>{t.pdfPayerSubtotal}: </span>
+                            <strong style={{ fontSize: '15px', color: '#667eea', fontWeight: '800' }}>
+                              ${group.total.toFixed(2)}
+                            </strong>
+                          </div>
+                        </div>
+
+                        {/* Table of expenses for this payer */}
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                          <thead>
+                            <tr style={{ background: '#f7fafc', color: '#718096', borderBottom: '1px solid #e2e8f0' }}>
+                              <th style={{ textAlign: 'left', padding: '8px 14px', width: '40%' }}>{t.pdfExpenseName}</th>
+                              <th style={{ textAlign: 'left', padding: '8px 14px', width: '40%' }}>{t.pdfParticipants}</th>
+                              <th style={{ textAlign: 'right', padding: '8px 14px', width: '20%' }}>{t.pdfAmount}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.expenses.map((e, idx) => {
+                              const isAllParticipants = families.length > 0 && families.every(f => e.participant_ids.includes(f.id));
+                              const participantNames = isAllParticipants
+                                ? t.everyone
+                                : e.participant_ids
+                                    .map(id => families.find(f => f.id === id)?.name)
+                                    .filter(Boolean)
+                                    .join(', ');
+                              return (
+                                <tr key={e.id} style={{ borderBottom: idx === group.expenses.length - 1 ? 'none' : '1px solid #edf2f7', background: idx % 2 === 0 ? '#ffffff' : '#fafafa' }}>
+                                  <td style={{ padding: '8px 14px', fontWeight: '600', color: '#2d3748' }}>{e.name}</td>
+                                  <td style={{ padding: '8px 14px', color: '#718096', fontSize: '12px' }}>{participantNames}</td>
+                                  <td style={{ textAlign: 'right', padding: '8px 14px', fontWeight: '700', color: '#2b6cb0' }}>${Number(e.amount).toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div style={{ marginTop: '30px', paddingTop: '16px', borderTop: '1px solid #e2e8f0', textAlign: 'center', fontSize: '12px', color: '#a0aec0' }}>
+                🏖️ {t.appName} • Exported with AA Calculator
+              </div>
+            </div>
           </div>
         </div>
       )}
